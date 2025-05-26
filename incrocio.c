@@ -36,15 +36,15 @@ int main()
         perror("Errore in creazione della prima pipe\n");
         exit(EXIT_FAILURE);
     }
-    pid_t pid = fork(); // fork dei processi
+    pid_t pid = fork(); 
 
     if (pid == 0) // processo figlio
     {
-        incrocio(pipe_g_i);
+        garage(pipe_g_i);
     }
     else // processo padre
     {
-        garage(pipe_g_i);
+        incrocio(pipe_g_i);
     }
 
     return EXIT_SUCCESS;
@@ -61,15 +61,23 @@ void incrocio(int *pipe_g_i)
         exit(EXIT_FAILURE);
     }
 
-    int pipefd_out[4];
-    int pipefd_in[4];
+    int pipefd_out[NUM_AUTO]; //array per la comunicazione tra incrocio e automobili
+    int pipefd_in[NUM_AUTO]; //
+
+    int incrocioFD = open("incrocio.txt", O_WRONLY|O_CREAT|O_APPEND, S_IWUSR|S_IRUSR);
+    if (incrocioFD == -1)
+    {
+        perror("Errore in creazione del file incrocio.txt\n");
+        exit(EXIT_FAILURE);
+    }
+    
 
     //printf("Apertura delle named pipe per incrocio\n");
     for (int i = 0; i < NUM_AUTO; i++) //crea un array con le pipe per ogni auto
     {
-        char* outputPath = getPipePath(i, "i_a_pipe");
+        char* outputPath = getPipePath(i, "i_a_pipe"); //la funzione getPipePath restituisce il path della fifo dato nome e indice
         char* inputPath = getPipePath(i, "a_i_pipe");
-        //printf("Path output pipe %d: %s\n", i, outputPath);
+        //printf("Path output pipe %d: %s\n", i, outputPath); //printf di debug
         //printf("Path input pipe %d: %s\n", i,  inputPath);
         pipefd_out[i] = open(outputPath, O_WRONLY); //in output
         pipefd_in[i] = open(inputPath, O_RDONLY); //in input 
@@ -81,17 +89,16 @@ void incrocio(int *pipe_g_i)
     for (int i = 0; i < NUM_AUTO; i++)
     {
         int next = GetNextCar(arrAuto);
-        arrAuto[next] = -1;
         printf("Incrocio: %d° auto ad attraversare: %d\n", i+1, next);
-        char msg = PROCEDI;
+        int msg = PROCEDI;
         wRet = write(pipefd_out[next], &msg, sizeof(msg));
         if(wRet == -1){
             perror("Incrocio: errore in scrittura\n");
             exit(EXIT_FAILURE);
         }
-
+        
         int aRet; //messaggio di ritorno dall'automobile
-
+        
         int rRet = read(pipefd_in[next], &aRet, sizeof(aRet));
         if (rRet == -1)
         {
@@ -101,8 +108,17 @@ void incrocio(int *pipe_g_i)
         if (aRet == AUTO_TRANSITATA)
         {
             printf("Incrocio: conferma ricevuta che l'auto %d è transitata\n", next);
+            arrAuto[next] = -1; //si segna l'auto come transitata
+            char line[3] = {next+'0', '\n', '\0'}; 
+            int wRet = write(incrocioFD, line, strlen(line));
+            if (wRet == -1)
+            {
+                perror("Errore in scrittura su incrocioFD\n");
+                exit(EXIT_FAILURE);
+            }
+            
         }else{
-            perror("Errore da aRet\n");
+            perror("Incrocio: Errore di lettura dall'automobile\n");
             exit(EXIT_FAILURE);
         }
 
@@ -160,7 +176,6 @@ void garage(int *pipe_g_i)
 void automobile(int numAuto, int numStrada){
     //printf("Sono l'automobile %d e devo prendere la strada %d\n", numAuto, numStrada);
     
-    
     char* i_path = getPipePath(numAuto, "i_a_pipe");
     char* o_path = getPipePath(numAuto, "a_i_pipe");
     
@@ -173,7 +188,7 @@ void automobile(int numAuto, int numStrada){
         exit(EXIT_FAILURE);
     }
     int pipe_out = open(o_path, O_WRONLY);
-    if (pipe_in == -1)
+    if (pipe_out == -1)
     {
         perror("Automobile: errore in apertura della pipe per l'incrocio\n");
         exit(EXIT_FAILURE);
@@ -184,17 +199,50 @@ void automobile(int numAuto, int numStrada){
 
     if (rRet == -1)
     {
-        perror("Automobile: errore in lettura\n");
+        printf("Automobile: errore in lettura\n");
+        printf("Errore: %d\n", errno);
         exit(EXIT_FAILURE);
     }
+    
+    int autoFd = open("auto.txt", O_CREAT|O_WRONLY|O_APPEND, S_IWUSR|S_IRUSR);
+    if (autoFd == -1)
+    {
+        perror("Automobile: errore in apertura del file auto.txt\n");
+        exit(EXIT_FAILURE);
+    }
+    
+
 
     if (msg == PROCEDI)
     {
-        int msg = AUTO_TRANSITATA;
         printf("Automobile %d: procedo nell'attraversamento\n", numAuto);
-        write(pipe_out, &msg, sizeof(msg));
+        char line[3];
+        
+        line[0] = numAuto+'0';
+        line[1] = '\n';
+        line[2] = '\0';
+
+        int wfRet = write(autoFd, line, strlen(line));
+        if (wfRet == -1)
+        {
+            perror("Automobile: errore in scrittura sul file\n");
+            exit(EXIT_FAILURE);
+        }
+        close(autoFd);
+        int msg = AUTO_TRANSITATA;
+
+        int wpRet = write(pipe_out, &msg, sizeof(msg));
+
+        if (wpRet == -1)
+        {
+            perror("Automobile: errore in scrittura su pipe\n");
+            exit(EXIT_FAILURE);
+        }
+        
+
     }else{
-        printf("Automobile: errore in lettura\n");
+        printf("Automobile: messaggio ricevuto non conforme\n");
+        printf("Messaggio: %d\n", msg);
         exit(EXIT_FAILURE);
     }
     return;
@@ -232,6 +280,7 @@ int initFIFO(){
     }
     return 0;
 }
+
 
 char* getPipePath(int i, char* name){
     char ind[2];
