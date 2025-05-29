@@ -11,7 +11,6 @@
 #define PROCEDI 11
 
 
-
 int GetDistanceFromStreet(int iStreet, int iDirezione) {
 	if(iDirezione == 0)
 		iDirezione = 4;

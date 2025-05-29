@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "signal.h": "c",
+        "incrocio.h": "c"
+    },
+    "C_Cpp.default.cStandard": "gnu23"
+}
