@@ -1,5 +1,10 @@
 #usr/bin/bash
 
+rm auto.txt 
+rm incrocio.txt
+
+mkdir tmp -p
+
 gcc -o incrocio incrocio.c -Wall
 
 RET=$?
@@ -11,3 +16,7 @@ then
 else
     ./incrocio
 fi
+
+printf "differenze tra auto.txt e incrocio.txt:"
+diff auto.txt incrocio.txt
+printf ""

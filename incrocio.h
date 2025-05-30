@@ -9,7 +9,8 @@
 #define NUM_AUTO NUM_STRADE
 #define AUTO_TRANSITATA 10
 #define PROCEDI 11
-
+#define TERMINA 0
+#define TERMINATO 13
 
 int GetDistanceFromStreet(int iStreet, int iDirezione) {
 	if(iDirezione == 0)
