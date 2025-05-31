@@ -9,7 +9,7 @@ gcc -o incrocio incrocio.c -Wall
 
 RET=$?
 
-printf ""
+printf "\n"
 if test $RET -ne 0 
 then
     echo "errore"
@@ -17,6 +17,4 @@ else
     ./incrocio
 fi
 
-printf "differenze tra auto.txt e incrocio.txt:"
-diff auto.txt incrocio.txt
-printf ""
+printf "\n"

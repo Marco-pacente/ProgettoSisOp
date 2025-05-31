@@ -13,7 +13,7 @@ void SigTermHandlerIncrocio();
 
 void SigTermHandlerGarage();
 
-void SigTermHandlerAuto();
+void SigTermHandlerAuto(); //superfluo, però per sicurezza
 
 void incrocio(int *pipe_g_i); // come argomento la pipe dal garage all'incrocio
 
@@ -70,7 +70,7 @@ void incrocio(int *pipe_g_i)
 {
     struct sigaction sa;
     memset(&sa, '\0', sizeof(struct sigaction));
-    sa.sa_flags = 0; //disabilita il sa_restart a seguito della ricezione di un signal
+    //sa.sa_flags = 0; //disabilita il sa_restart a seguito della ricezione di un signal
     sa.sa_handler = SigTermHandlerIncrocio; //imposta l'handler
     sigaction(SIGTERM, &sa, NULL); //imposta la sigaction
 
@@ -128,39 +128,39 @@ void incrocio(int *pipe_g_i)
                 perror("Incrocio: errore in scrittura\n");
                 exit(EXIT_FAILURE);
             }
-
-            int aRet; //messaggio di ritorno dall'automobile
-
-            int rRet = read(pipefd_in[next], &aRet, sizeof(aRet)); //riceve il messaggio di conferma dall'automobile che ha appena attraversato
-            if (rRet == -1)
-            { 
-                if (errno == EINTR)
-                {
-                    continue;
-                }
-                
-                perror("Incrocio: errore in lettura dall'automobile\n");
-                exit(EXIT_FAILURE);
-            }
-            if (aRet == AUTO_TRANSITATA)
+            if (msg == PROCEDI) //nel caso lo stato di keep_going cambi durante l'attesa, il controllo si fa direttamente sul messaggio inviato
             {
-                printf("Incrocio: conferma ricevuta che l'auto %d è transitata\n", next);
-                arrAuto[next] = -1; //si segna l'auto come transitata
-                char line[3] = {next+'0', '\n', '\0'}; //riga da scrivere sul file
-                int wRet = write(incrocioFD, line, strlen(line)); 
-                if (wRet == -1)
-                {
-                    perror("Errore in scrittura su incrocioFD\n");
+                int aRet; //messaggio di ritorno dall'automobile
+    
+                int rRet = read(pipefd_in[next], &aRet, sizeof(aRet)); //riceve il messaggio di conferma dall'automobile che ha appena attraversato
+                if (rRet == -1)
+                { 
+                    if (errno == EINTR)
+                    {
+                        continue;
+                    }
+                    
+                    perror("Incrocio: errore in lettura dall'automobile\n");
                     exit(EXIT_FAILURE);
                 }
-            
-            }else if(aRet == TERMINATO){
-                continue;
-            }
-            else{
-                perror("Incrocio: Errore di lettura dall'automobile\n");
-                exit(EXIT_FAILURE);
-            }
+                if (aRet == AUTO_TRANSITATA)
+                {
+                    printf("Incrocio: conferma ricevuta che l'auto %d è transitata\n", next);
+                    arrAuto[next] = -1; //si segna l'auto come transitata
+                    char line[3] = {next+'0', '\n', '\0'}; //riga da scrivere sul file
+                    int wRet = write(incrocioFD, line, strlen(line)); 
+                    if (wRet == -1)
+                    {
+                        perror("Errore in scrittura su incrocioFD\n");
+                        exit(EXIT_FAILURE);
+                    }
+                
+                }else{
+                    perror("Incrocio: Errore di lettura dall'automobile\n");
+                    exit(EXIT_FAILURE);
+                }
+            } 
+            //se il messaggio era quello di terminazione, si procede direttamente senza aspettare la conferma
         }
         
     }
@@ -177,6 +177,7 @@ void incrocio(int *pipe_g_i)
     close(pipe_g_i[0]);
     int status;
     waitpid(garage_pid, &status, 0); //attende che garage finisca
+    //a sua volta garage termina solo quando terminano i processi incrocio
     return; //esce e termina
 }
 
@@ -272,49 +273,47 @@ void automobile(int numAuto, int numStrada){
         exit(EXIT_FAILURE);
     }
     
-    int autoFd = open("auto.txt", O_CREAT|O_WRONLY|O_APPEND, S_IWUSR|S_IRUSR);
-    if (autoFd == -1)
-    {
-        perror("Automobile: errore in apertura del file auto.txt\n");
-        exit(EXIT_FAILURE);
-    }
-    
 
-
-    if (msgIn == PROCEDI || msgIn == TERMINA) //un po' macchinoso
+    if (msgIn == PROCEDI) //se si è ricevuta l'autorizzazione a impegnare l'incrocio
     {
-        if (msgIn == PROCEDI) //se incrocio non sta terminando si procede come sempre
-        {
-            printf("Automobile %d: procedo nell'attraversamento\n", numAuto); //si attraversa
-            char line[3] = {numAuto+'0', '\n', '\0'};
-            
-            int wfRet = write(autoFd, line, strlen(line));
-            if (wfRet == -1)
-            {
-                perror("Automobile: errore in scrittura sul file\n");
-                exit(EXIT_FAILURE);
-            }
+        int autoFd = open("auto.txt", O_CREAT|O_WRONLY|O_APPEND, S_IWUSR|S_IRUSR); //apertura (o creazione del file auto.txt)
+        if (autoFd == -1){
+            perror("Automobile: errore in apertura del file auto.txt\n");
+            exit(EXIT_FAILURE);
         }
+        printf("Automobile %d (processo %d): procedo nell'attraversamento\n", numAuto, getpid()); //si attraversa
+        char line[3] = {numAuto+'0', '\n', '\0'}; 
         
+        int wfRet = write(autoFd, line, strlen(line)); 
+        if (wfRet == -1){
+            perror("Automobile: errore in scrittura sul file\n");
+            exit(EXIT_FAILURE);
+        }
+        close(autoFd); //chiusura del file
 
-        int msgOut = (msgIn == PROCEDI) ? AUTO_TRANSITATA : TERMINATO; //il messaggio di ritorno dipende da quello ricevuto 
-
-        int wpRet = write(pipe_out, &msgOut, sizeof(msgOut));
-
+        int msgOut = AUTO_TRANSITATA;
+        int wpRet = write(pipe_out, &msgOut, sizeof(msgOut)); //si invia la conferma che l'auto è transitata a incrocio
         if (wpRet == -1)
         {
             perror("Automobile: errore in scrittura su pipe\n");
             exit(EXIT_FAILURE);
         }
-        
-        
-    }else{
+
+
+    }else if (msgIn != TERMINA) //se il messaggio non è quello di terminazione, dà errore
+    {
         printf("Automobile: messaggio ricevuto non conforme\n");
         printf("Messaggio: %d\n", msgIn);
         exit(EXIT_FAILURE);
     }
+    //in caso il messaggio sia quello di terminazione, si salta direttamente alla 
+    //liberazione delle risorse occupate
+    close(pipe_in);
+    close(pipe_out);
+    return;
+    
+
     //liberazione risorse occupate
-    close(autoFd);
     close(pipe_in);
     close(pipe_out);
     return;
