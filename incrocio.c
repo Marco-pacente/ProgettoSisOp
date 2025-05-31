@@ -281,7 +281,7 @@ void automobile(int numAuto, int numStrada){
             perror("Automobile: errore in apertura del file auto.txt\n");
             exit(EXIT_FAILURE);
         }
-        printf("Automobile %d (processo %d): procedo nell'attraversamento\n", numAuto, getpid()); //si attraversa
+        printf("Automobile %d: procedo nell'attraversamento\n", numAuto); //si attraversa
         char line[3] = {numAuto+'0', '\n', '\0'}; 
         
         int wfRet = write(autoFd, line, strlen(line)); 
@@ -320,9 +320,7 @@ void automobile(int numAuto, int numStrada){
 }
 
 int initFIFO(){
-    
-    for (int i = 0; i < NUM_AUTO; i++)
-    {
+    for (int i = 0; i < NUM_AUTO; i++){
         char* i_a_path = getPipePath(i, "i_a_pipe");
         char* a_i_path = getPipePath(i, "a_i_pipe");
 

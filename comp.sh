@@ -16,5 +16,3 @@ then
 else
     ./incrocio
 fi
-
-printf "\n"
