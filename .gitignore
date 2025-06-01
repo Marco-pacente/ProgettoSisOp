@@ -1,2 +1,2 @@
-auto.txt
-incrocio.txt
+*.txt
+.vscode/

@@ -13,8 +13,6 @@ void SigTermHandlerIncrocio();
 
 void SigTermHandlerGarage();
 
-void SigTermHandlerAuto(); //superfluo, però per sicurezza
-
 void incrocio(int *pipe_g_i); // come argomento la pipe dal garage all'incrocio
 
 void garage(int *pipe_g_i); //pipe in direzione opposta
@@ -237,13 +235,7 @@ void garage(int *pipe_g_i)
 }
 
 void automobile(int numAuto, int numStrada){
-    struct sigaction sa;
-    sa.sa_handler = SigTermHandlerAuto;
-    memset(&sa, '\0', sizeof(sa));
-    sigaction(SIGTERM, &sa, NULL);
-
-
-    //printf("Sono l'automobile %d e devo prendere la strada %d\n", numAuto, numStrada);
+    //printf("Automobile %d per strada %d\n", numAuto, numStrada);
     
     char* i_path = getPipePath(numAuto, "i_a_pipe");
     char* o_path = getPipePath(numAuto, "a_i_pipe");
@@ -264,7 +256,7 @@ void automobile(int numAuto, int numStrada){
     }
     int msgIn;
 
-    int rRet = read(pipe_in, &msgIn, sizeof(msgIn));
+    int rRet = read(pipe_in, &msgIn, sizeof(msgIn)); //si aspetta il messaggio dal processo incrocio
 
     if (rRet == -1)
     {
@@ -282,8 +274,8 @@ void automobile(int numAuto, int numStrada){
             exit(EXIT_FAILURE);
         }
         printf("Automobile %d: procedo nell'attraversamento\n", numAuto); //si attraversa
-        char line[3] = {numAuto+'0', '\n', '\0'}; 
         
+        char line[3] = {numAuto+'0', '\n', '\0'}; 
         int wfRet = write(autoFd, line, strlen(line)); 
         if (wfRet == -1){
             perror("Automobile: errore in scrittura sul file\n");
@@ -300,14 +292,14 @@ void automobile(int numAuto, int numStrada){
         }
 
 
-    }else if (msgIn != TERMINA) //se il messaggio non è quello di terminazione, dà errore
+    }else if (msgIn != TERMINA) //se il messaggio non è nemmeno quello di terminazione, dà errore
     {
         printf("Automobile: messaggio ricevuto non conforme\n");
         printf("Messaggio: %d\n", msgIn);
         exit(EXIT_FAILURE);
     }
     //in caso il messaggio sia quello di terminazione, si salta direttamente alla 
-    //liberazione delle risorse occupate
+    //liberazione delle risorse occupate che verrebbe comunque eseguito da
     close(pipe_in);
     close(pipe_out);
     return;
@@ -337,7 +329,7 @@ int initFIFO(){
             }
         }
 
-        if (access(a_i_path, F_OK) == -1) //access ritorna -1 se il file non esiste
+        if (access(a_i_path, F_OK) == -1)
         {
             printf("Creo pipe %s\n", a_i_path);
             fRet = mkfifo(a_i_path, S_IRUSR|S_IWUSR); 
@@ -355,7 +347,7 @@ int initFIFO(){
 
 char* getPipePath(int i, char* name){
     char ind[2];
-    char* path = malloc(strlen(name) + 7); //lunghezza del nome + lunghezza di "./tmp/" + 1 (\0)
+    char* path = malloc(strlen(name) + strlen("./tmp/") + 1); //lunghezza del nome + lunghezza di "./tmp/" + 1 (\0)
     strcpy(path, "./tmp/");
     strcat(path, name);//metodo non molto elegante per avere i nomi delle pipe
     ind[0] = i+'0'; //con indice + '0' si ottiene il carattere ASCII dell'indice 
@@ -366,18 +358,13 @@ char* getPipePath(int i, char* name){
 
 void SigTermHandlerIncrocio(){
     printf("Incrocio: ricevuto sigterm\n");
-    keep_going = 0;
+    keep_going = 0; //per far terminare il ciclo while
     return;
 }
 
 void SigTermHandlerGarage()
 {
     printf("Garage: ricevuto sigterm\n");
-    keep_going = 0;
-    return;
-}
-
-void SigTermHandlerAuto() {
-    printf("Automobile: Ricevuto SIGTERM\n");
+    keep_going = 0; //idem a sopra, si applica al keep_going visto da Garage
     return;
 }
